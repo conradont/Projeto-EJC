@@ -1,4 +1,4 @@
-import { forwardRef, InputHTMLAttributes, useEffect, useState, useCallback } from 'react'
+import { forwardRef, InputHTMLAttributes, useEffect, useState, useCallback, useRef } from 'react'
 import { FieldError, UseFormRegisterReturn, Control, useWatch } from 'react-hook-form'
 import { maskDate, maskPhone, formatDateToBrazilian } from '@/lib/masks'
 import { ParticipantFormData } from '@/schemas/participant'
@@ -16,6 +16,7 @@ const MaskedInput = forwardRef<HTMLInputElement, MaskedInputProps>(
     const [displayValue, setDisplayValue] = useState<string>('')
     const fieldName = register.name as keyof ParticipantFormData
     const formValue = control ? useWatch({ control, name: fieldName }) : undefined
+    const inputRef = useRef<HTMLInputElement | null>(null)
 
     // Função para atualizar o display value baseado no valor fornecido
     const updateDisplayFromValue = useCallback((value: string | null | undefined) => {
@@ -53,21 +54,14 @@ const MaskedInput = forwardRef<HTMLInputElement, MaskedInputProps>(
       } else {
         // Se não temos control, verifica o valor do input após montar
         const timer = setTimeout(() => {
-          // register.ref pode ser uma função ou um objeto RefObject
-          if (typeof register.ref === 'function') {
-            // Se for função, não podemos acessar .current diretamente
-            // Nesse caso, vamos tentar obter o valor de outra forma
-            return
-          } else {
-            const inputElement = register.ref?.current
-            if (inputElement?.value) {
-              updateDisplayFromValue(inputElement.value)
-            }
+          // Usa a ref local para obter o valor
+          if (inputRef.current?.value) {
+            updateDisplayFromValue(inputRef.current.value)
           }
         }, 0)
         return () => clearTimeout(timer)
       }
-    }, [formValue, mask, control, updateDisplayFromValue, register.ref])
+    }, [formValue, mask, control, updateDisplayFromValue])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value
@@ -109,6 +103,7 @@ const MaskedInput = forwardRef<HTMLInputElement, MaskedInputProps>(
           {...props}
           {...register}
           ref={(e) => {
+            inputRef.current = e
             register.ref(e)
             if (typeof ref === 'function') {
               ref(e)

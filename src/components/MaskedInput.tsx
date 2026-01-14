@@ -45,18 +45,29 @@ const MaskedInput = forwardRef<HTMLInputElement, MaskedInputProps>(
     useEffect(() => {
       // Se temos control, usa o valor do watch para sincronizar
       if (control) {
-        updateDisplayFromValue(formValue)
+        // Converte formValue para string se necessário
+        const valueToUse = typeof formValue === 'string' || formValue === null || formValue === undefined
+          ? formValue
+          : String(formValue)
+        updateDisplayFromValue(valueToUse)
       } else {
         // Se não temos control, verifica o valor do input após montar
         const timer = setTimeout(() => {
-          const inputElement = register.ref.current
-          if (inputElement?.value) {
-            updateDisplayFromValue(inputElement.value)
+          // register.ref pode ser uma função ou um objeto RefObject
+          if (typeof register.ref === 'function') {
+            // Se for função, não podemos acessar .current diretamente
+            // Nesse caso, vamos tentar obter o valor de outra forma
+            return
+          } else {
+            const inputElement = register.ref?.current
+            if (inputElement?.value) {
+              updateDisplayFromValue(inputElement.value)
+            }
           }
         }, 0)
         return () => clearTimeout(timer)
       }
-    }, [formValue, mask, control, updateDisplayFromValue])
+    }, [formValue, mask, control, updateDisplayFromValue, register.ref])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value

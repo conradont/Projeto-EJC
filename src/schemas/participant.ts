@@ -1,9 +1,6 @@
 import { z } from 'zod'
 import {
-  maskDate,
   unmaskDate,
-  formatDateToBrazilian,
-  maskPhone,
   unmaskPhone,
   normalizeEmail,
   isValidEmail,

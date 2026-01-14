@@ -15,9 +15,6 @@ export default function ChurchMovementSection({
   watch,
 }: ChurchMovementSectionProps) {
   const churchMovement = watch('church_movement')
-  // Considera "Sim" se o campo não é null e não é string vazia
-  // Mas também precisa considerar quando o usuário ainda não selecionou nada
-  const hasMovement = churchMovement !== null && churchMovement !== ''
   
   // Estado para controlar se "Sim" ou "Não" foi selecionado
   // Se church_movement é null, então "Não" está selecionado

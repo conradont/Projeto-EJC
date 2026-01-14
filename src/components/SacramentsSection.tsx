@@ -1,6 +1,5 @@
 import { UseFormRegister, UseFormSetValue, UseFormWatch } from 'react-hook-form'
 import { ParticipantFormData } from '@/schemas/participant'
-import { useEffect } from 'react'
 
 interface SacramentsSectionProps {
   register: UseFormRegister<ParticipantFormData>

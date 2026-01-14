@@ -1,39 +1,49 @@
-# Ignorar pastas compiladas do Python
-
-__pycache__/
-
-*.pyc
-
-*.pyo
-
-*.pyd
-
-
-
-# Ignorar ambientes virtuais
-
+# Dependencies
+node_modules/
 venv/
-
-.env/
-
+env/
 .venv/
 
+# Build outputs
+dist/
+build/
+*.egg-info/
 
+# Environment variables
+.env
+.env.local
 
-# Ignorar configurações de IDEs
-
+# IDE
 .vscode/
-
 .idea/
+*.swp
+*.swo
 
+# OS
+.DS_Store
+Thumbs.db
 
-
-# Ignorar arquivos temporários
-
+# Logs
 *.log
+npm-debug.log*
 
-*.tmp
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
-*.bak
+# Data directories
+data/
+api/data/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+api/trash/
 
+# Testing
+.coverage
+.pytest_cache/

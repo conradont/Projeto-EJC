@@ -18,9 +18,12 @@ export default function LogoPage() {
       // Verificar se a logo existe fazendo uma requisição
       try {
         const response = await fetch(url)
-        if (response.ok) {
+        // 204 No Content ou 404 significa que não há logo
+        // 200 OK significa que há logo disponível
+        if (response.ok && response.status === 200) {
           setLogoUrl(url)
         } else {
+          // 204 No Content ou 404 = não há logo
           setLogoUrl(null)
         }
       } catch {

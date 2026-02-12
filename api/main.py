@@ -257,17 +257,24 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
 
 @app.get("/api/logo")
 async def get_logo(db: Session = Depends(get_db)):
-    """Retorna a logo: Supabase = redirect para signed URL; senão serve do disco."""
+    """Retorna a logo: Supabase = redirect para signed URL; senão serve do disco.
+    Se não houver logo, retorna 204 No Content em vez de 404 para evitar erros no frontend.
+    """
     if use_supabase_storage():
         logo_path = get_logo_path_from_db(db)
         if logo_path:
             signed_url = get_signed_url(BUCKET_LOGO, logo_path)
             if signed_url:
                 return RedirectResponse(url=signed_url)
+    
+    # Verificar se o diretório existe antes de listar
+    if not settings.LOGO_DIR.exists():
+        settings.LOGO_DIR.mkdir(parents=True, exist_ok=True)
+    
     logo_files = list(settings.LOGO_DIR.glob("*"))
     image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
     for logo_file in logo_files:
-        if logo_file.suffix.lower() in image_extensions:
+        if logo_file.is_file() and logo_file.suffix.lower() in image_extensions:
             content_type = "image/png"
             if logo_file.suffix.lower() in ['.jpg', '.jpeg']:
                 content_type = "image/jpeg"
@@ -278,7 +285,11 @@ async def get_logo(db: Session = Depends(get_db)):
             elif logo_file.suffix.lower() == '.svg':
                 content_type = "image/svg+xml"
             return FileResponse(logo_file, media_type=content_type)
-    raise HTTPException(status_code=404, detail="Logo não encontrada")
+    
+    # Retornar 204 No Content quando não há logo (em vez de 404)
+    # Isso evita erros nos logs e é mais semântico: "não há conteúdo" vs "não encontrado"
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 @app.delete("/api/logo")
 async def delete_logo(db: Session = Depends(get_db)):

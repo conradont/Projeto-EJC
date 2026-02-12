@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     IS_POSTGRES: bool = "postgresql" in DATABASE_URL or "postgres" in DATABASE_URL
     IS_SQLITE: bool = "sqlite" in DATABASE_URL
     
+    # Supabase Storage (fotos e logo) - se definido, imagens vão para o Storage e retornam URL pública
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    
     # Diretórios
     BASE_DIR: Path = Path(__file__).parent.parent
     

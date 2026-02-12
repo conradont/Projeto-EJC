@@ -90,6 +90,7 @@ def optimize_database():
 def init_db():
     """Inicializa o banco de dados criando as tabelas e aplicando migrações"""
     from models.participant import Participant
+    from models.event_setting import EventSetting
     
     # Criar todas as tabelas se não existirem
     Base.metadata.create_all(bind=engine)

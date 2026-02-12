@@ -51,11 +51,11 @@ export const pdfApi = {
 }
 
 export const photosApi = {
-  upload: async (file: File): Promise<{ filename: string; path: string }> => {
+  upload: async (file: File): Promise<{ filename: string; path: string; url?: string }> => {
     const formData = new FormData()
     formData.append('file', file)
     
-    const response = await axios.post<{ filename: string; path: string }>(
+    const response = await axios.post<{ filename: string; path: string; url?: string }>(
       '/api/photos/upload',
       formData,
       {
@@ -67,8 +67,10 @@ export const photosApi = {
     return response.data
   },
 
+  /** Retorna a URL da foto: se path já for URL (Supabase), devolve como está; senão /api/photos/{path}. */
   getUrl: (filename: string | null | undefined): string | null => {
     if (!filename) return null
+    if (filename.startsWith('http://') || filename.startsWith('https://')) return filename
     return `/api/photos/${filename}`
   },
 }

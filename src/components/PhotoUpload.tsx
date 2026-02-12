@@ -38,9 +38,8 @@ export default function PhotoUpload({ setValue, watch }: PhotoUploadProps) {
         
         // Fazer upload para o servidor
         const result = await photosApi.upload(file)
-        
-        // Salvar o nome do arquivo no formulário
-        setValue('photo_path', result.filename)
+        // path = caminho no Storage (Supabase) ou filename (local); a API gera signed URL ao servir
+        setValue('photo_path', result.path ?? result.filename)
       } catch (error) {
         console.error('Erro ao fazer upload da foto:', error)
         setPreview(null)

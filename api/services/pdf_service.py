@@ -1,5 +1,7 @@
 """Serviço para geração de PDFs"""
 import datetime
+import tempfile
+import urllib.request
 from pathlib import Path
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -27,24 +29,74 @@ class PDFService:
             alignment=0,  # LEFT
         )
     
+    def _resolve_image_to_path(self, path_or_url: Optional[str]) -> Optional[Path]:
+        """Converte path ou URL em Path local. URL = baixa para temp; path Supabase = signed URL depois baixa."""
+        if not path_or_url or not str(path_or_url).strip():
+            return None
+        s = str(path_or_url).strip()
+        if s.startswith("http://") or s.startswith("https://"):
+            return self._download_url_to_temp(s)
+        try:
+            from services.storage_service import use_supabase_storage, get_signed_url, BUCKET_PHOTOS
+            if use_supabase_storage():
+                signed_url = get_signed_url(BUCKET_PHOTOS, s)
+                if signed_url:
+                    return self._download_url_to_temp(signed_url)
+        except Exception as e:
+            print(f"⚠ Erro ao obter signed URL para foto ({s}): {e}")
+        if Path(s).is_absolute():
+            p = Path(s)
+        else:
+            p = settings.PHOTOS_DIR / s
+            if not p.exists():
+                p = settings.PHOTOS_DIR / Path(s).name
+            if not p.exists():
+                p = settings.LOGO_DIR / s
+            if not p.exists():
+                p = settings.LOGO_DIR / Path(s).name
+        return p if p.exists() else None
+
+    def _download_url_to_temp(self, url: str) -> Optional[Path]:
+        """Baixa uma URL para arquivo temporário e retorna o Path."""
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "EJC-API/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = resp.read()
+            suffix = Path(url).suffix or ".png"
+            if suffix not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+                suffix = ".png"
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp.write(data)
+            tmp.close()
+            return Path(tmp.name)
+        except Exception as e:
+            print(f"⚠ Erro ao baixar imagem de URL: {e}")
+            return None
+
     def _get_logo_path(self) -> Optional[Path]:
-        """Busca a logo no diretório de logo (sempre busca dinamicamente)"""
+        """Busca a logo: Supabase = path no banco → signed URL → download; senão diretório local."""
+        try:
+            from services.storage_service import (
+                use_supabase_storage,
+                get_logo_path_from_db,
+                get_signed_url,
+                BUCKET_LOGO,
+            )
+            if use_supabase_storage():
+                logo_path = get_logo_path_from_db(self.db)
+                if logo_path:
+                    signed_url = get_signed_url(BUCKET_LOGO, logo_path)
+                    if signed_url:
+                        return self._resolve_image_to_path(signed_url)
+        except Exception as e:
+            print(f"⚠ Erro ao obter logo do banco: {e}")
         logo_dir = settings.DATA_DIR / "logo"
         if not logo_dir.exists():
-            print(f"⚠ Diretório de logo não existe: {logo_dir}")
             return None
-        
-        # Procurar qualquer arquivo de imagem
         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
-        logo_files = list(logo_dir.glob("*"))
-        print(f"🔍 Arquivos no diretório de logo: {[f.name for f in logo_files]}")
-        
-        for logo_file in logo_files:
+        for logo_file in logo_dir.glob("*"):
             if logo_file.suffix.lower() in image_extensions and logo_file.exists():
-                print(f"✓ Logo encontrada: {logo_file}")
                 return logo_file
-        
-        print(f"⚠ Nenhuma logo válida encontrada no diretório: {logo_dir}")
         return None
     
     def _wrap_text(self, text, max_width):
@@ -193,22 +245,8 @@ class PDFService:
         photo_exists = False
         
         if participant_photo_path:
-            # Construir caminho completo da foto
-            clean_path = str(participant_photo_path).strip()
-            
-            if Path(clean_path).is_absolute():
-                photo_full_path = Path(clean_path)
-            else:
-                photo_full_path = settings.PHOTOS_DIR / clean_path
-                
-                if not photo_full_path.exists():
-                    filename = Path(clean_path).name
-                    photo_full_path = settings.PHOTOS_DIR / filename
-                
-                if not photo_full_path.exists():
-                    photo_full_path = Path(clean_path)
-            
-            if photo_full_path.exists():
+            photo_full_path = self._resolve_image_to_path(participant_photo_path)
+            if photo_full_path and photo_full_path.exists():
                 try:
                     from PIL import Image
                     img_valid = True

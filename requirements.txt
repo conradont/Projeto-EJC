@@ -1,3 +1,4 @@
+# Mesmo conteúdo do api/requirements.txt para o build na Vercel
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-multipart>=0.0.20,<1.0

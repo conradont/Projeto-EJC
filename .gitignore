@@ -7,6 +7,9 @@ env/
 # Build outputs
 dist/
 build/
+EJC-Release/
+# PyInstaller (build-exe.ps1 gera dist/EJC-Sistema.exe)
+*.spec.log
 *.egg-info/
 
 # Environment variables

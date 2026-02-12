@@ -3,20 +3,26 @@ from pydantic_settings import BaseSettings
 from pathlib import Path
 from typing import List
 import os
+import sys
+
+# Quando rodando como .exe (PyInstaller), dados ficam na pasta do executável
+_base_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent.parent
 
 
 class Settings(BaseSettings):
-    # API
+    # API (modo único: um servidor serve API + frontend na porta 8000)
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    DEBUG: bool = True
+    DEBUG: bool = False  # True apenas se definir DEBUG=1 no .env (desenvolvimento)
     
     # Detectar ambiente
     IS_VERCEL: bool = os.getenv("VERCEL") == "1"
     IS_PRODUCTION: bool = os.getenv("ENVIRONMENT") == "production" or IS_VERCEL
     
-    # CORS - Adicionar domínios dinamicamente
+    # CORS - app roda em um único servidor (localhost:8000); outras origens para Vercel/dev
     _default_origins = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
@@ -49,7 +55,7 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     
     # Diretórios
-    BASE_DIR: Path = Path(__file__).parent.parent
+    BASE_DIR: Path = _base_dir
     
     # Usar armazenamento local quando não estiver no Vercel
     # No Vercel, usar /tmp (temporário) ou manter local se possível
@@ -67,7 +73,8 @@ class Settings(BaseSettings):
     LOGO_DIR: Path = DATA_DIR / "logo"
     
     class Config:
-        env_file = ".env"
+        # .exe: .env ao lado do executável; desenvolvimento: api/.env
+        env_file = str(_base_dir / ".env") if getattr(sys, "frozen", False) else str(_base_dir / "api" / ".env")
         case_sensitive = True
 
 

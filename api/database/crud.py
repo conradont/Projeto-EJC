@@ -1,9 +1,64 @@
 """Operações CRUD para participantes"""
+import re
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from typing import List, Optional
 from models.participant import Participant as ParticipantModel
 from models.participant import ParticipantCreate, ParticipantUpdate
+
+
+def _normalize_phone(phone: Optional[str]) -> Optional[str]:
+    """Retorna só os dígitos do telefone para comparação, ou None se vazio."""
+    if not phone or not str(phone).strip():
+        return None
+    digits = re.sub(r"\D", "", str(phone).strip())
+    return digits if digits else None
+
+
+def get_participants_count(db: Session, search: Optional[str] = None) -> int:
+    """Retorna o total de participantes (com filtro de busca opcional)."""
+    query = db.query(func.count(ParticipantModel.id))
+    if search:
+        search_filter = f"%{search.lower()}%"
+        query = query.filter(
+            or_(
+                ParticipantModel.name.ilike(search_filter),
+                ParticipantModel.common_name.ilike(search_filter),
+                ParticipantModel.email.ilike(search_filter),
+                ParticipantModel.phone.ilike(search_filter),
+                ParticipantModel.instagram.ilike(search_filter),
+                ParticipantModel.address.ilike(search_filter),
+                ParticipantModel.neighborhood.ilike(search_filter),
+            )
+        )
+    return query.scalar() or 0
+
+
+def participant_exists_with_email(
+    db: Session, email: Optional[str], exclude_id: Optional[int] = None
+) -> bool:
+    """Verifica se já existe participante com o e-mail (ignorando exclude_id na edição)."""
+    if not email or not str(email).strip():
+        return False
+    q = db.query(ParticipantModel).filter(ParticipantModel.email.ilike(str(email).strip()))
+    if exclude_id is not None:
+        q = q.filter(ParticipantModel.id != exclude_id)
+    return q.first() is not None
+
+
+def participant_exists_with_phone(
+    db: Session, phone: Optional[str], exclude_id: Optional[int] = None
+) -> bool:
+    """Verifica se já existe participante com o telefone (ignorando exclude_id na edição)."""
+    normalized = _normalize_phone(phone)
+    if not normalized:
+        return False
+    # Buscar participantes cujo telefone normalizado coincide
+    all_with_phone = db.query(ParticipantModel).filter(ParticipantModel.phone.isnot(None)).filter(ParticipantModel.phone != "").all()
+    for p in all_with_phone:
+        if _normalize_phone(p.phone) == normalized and (exclude_id is None or p.id != exclude_id):
+            return True
+    return False
 
 
 def get_participants(

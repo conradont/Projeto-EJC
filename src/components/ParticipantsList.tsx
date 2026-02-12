@@ -11,8 +11,8 @@ export default function ParticipantsList() {
   const [page, setPage] = useState(1)
   const itemsPerPage = 10
 
-  const { data: participants = [], isLoading } = useQuery({
-    queryKey: ['participants', search],
+  const { data, isLoading } = useQuery({
+    queryKey: ['participants', search, page],
     queryFn: () =>
       participantsApi.getAll({
         skip: (page - 1) * itemsPerPage,
@@ -20,6 +20,10 @@ export default function ParticipantsList() {
         search: search || undefined,
       }),
   })
+
+  const participants = data?.participants ?? []
+  const total = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage))
 
   const queryClient = useQueryClient()
 
@@ -48,7 +52,13 @@ export default function ParticipantsList() {
     <div className="space-y-6">
       <SearchBar value={search} onChange={setSearch} />
       <FiltersPanel />
-      
+
+      {total > 0 && (
+        <p className="text-gray-400 text-sm">
+          {total} participante{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
+        </p>
+      )}
+
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {participants.map((participant) => (
           <ParticipantCard
@@ -65,7 +75,7 @@ export default function ParticipantsList() {
         </div>
       )}
 
-      <div className="flex justify-center gap-2">
+      <div className="flex justify-center items-center gap-2 flex-wrap">
         <button
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page === 1}
@@ -73,10 +83,12 @@ export default function ParticipantsList() {
         >
           Anterior
         </button>
-        <span className="px-4 py-2 text-gray-300">Página {page}</span>
+        <span className="px-4 py-2 text-gray-300">
+          Página {page} de {totalPages}
+        </span>
         <button
           onClick={() => setPage((p) => p + 1)}
-          disabled={participants.length < itemsPerPage}
+          disabled={page >= totalPages}
           className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
         >
           Próxima

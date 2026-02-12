@@ -3,15 +3,22 @@ from fastapi import FastAPI, HTTPException, Depends, Request, status, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uvicorn
 import shutil
 from pathlib import Path
+import sys
 import uuid
 
 from database.database import get_db, init_db
 from models.participant import ParticipantResponse, ParticipantCreate, ParticipantUpdate
+
+
+class ParticipantsListResponse(BaseModel):
+    participants: List[ParticipantResponse]
+    total: int
 from services.pdf_service import PDFService
 from services.storage_service import (
     use_supabase_storage,
@@ -55,8 +62,18 @@ app.add_middleware(
 async def startup_event():
     init_db()
 
+def _dist_dir() -> Path:
+    """Pasta dist: dentro do .exe (PyInstaller) ou ao lado de api/."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "dist"
+    return Path(__file__).resolve().parent.parent / "dist"
+
+
 @app.get("/")
 async def root():
+    _root_dist = _dist_dir()
+    if _root_dist.exists() and (_root_dist / "index.html").exists():
+        return FileResponse(_root_dist / "index.html", media_type="text/html")
     return {"message": "EJC Sistema API", "version": "1.0.0"}
 
 @app.get("/api/health")
@@ -64,18 +81,19 @@ async def health_check():
     return {"status": "ok"}
 
 # Rotas de participantes
-@app.get("/api/participants", response_model=List[ParticipantResponse])
+@app.get("/api/participants", response_model=ParticipantsListResponse)
 async def get_participants(
     skip: int = 0,
     limit: int = 100,
     search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Lista todos os participantes com paginação e busca"""
+    """Lista todos os participantes com paginação e busca. Retorna total para paginação."""
     from database import crud
-    
+
     participants = crud.get_participants(db, skip=skip, limit=limit, search=search)
-    return participants
+    total = crud.get_participants_count(db, search=search)
+    return ParticipantsListResponse(participants=participants, total=total)
 
 @app.get("/api/participants/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(participant_id: int, db: Session = Depends(get_db)):
@@ -92,9 +110,19 @@ async def create_participant(
     participant: ParticipantCreate,
     db: Session = Depends(get_db)
 ):
-    """Cria um novo participante"""
+    """Cria um novo participante. Rejeita e-mail ou telefone duplicados."""
     from database import crud
-    
+
+    if crud.participant_exists_with_email(db, participant.email):
+        raise HTTPException(
+            status_code=409,
+            detail="Já existe um participante cadastrado com este e-mail.",
+        )
+    if crud.participant_exists_with_phone(db, participant.phone):
+        raise HTTPException(
+            status_code=409,
+            detail="Já existe um participante cadastrado com este telefone.",
+        )
     return crud.create_participant(db=db, participant=participant)
 
 @app.put("/api/participants/{participant_id}", response_model=ParticipantResponse)
@@ -103,9 +131,19 @@ async def update_participant(
     participant: ParticipantUpdate,
     db: Session = Depends(get_db)
 ):
-    """Atualiza um participante"""
+    """Atualiza um participante. Rejeita e-mail ou telefone duplicados."""
     from database import crud
-    
+
+    if participant.email is not None and crud.participant_exists_with_email(db, participant.email, exclude_id=participant_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Já existe um participante cadastrado com este e-mail.",
+        )
+    if participant.phone is not None and crud.participant_exists_with_phone(db, participant.phone, exclude_id=participant_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Já existe um participante cadastrado com este telefone.",
+        )
     db_participant = crud.update_participant(db, participant_id=participant_id, participant=participant)
     if db_participant is None:
         raise HTTPException(status_code=404, detail="Participante não encontrado")
@@ -121,31 +159,39 @@ async def delete_participant(participant_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Participante não encontrado")
     return None
 
+# Limite de tamanho para upload de imagens (4 MB)
+MAX_PHOTO_SIZE_BYTES = 4 * 1024 * 1024
+
 # Rotas de upload de fotos
 @app.post("/api/photos/upload")
 async def upload_photo(file: UploadFile = File(...)):
-    """Faz upload de uma foto. Com Supabase Storage retorna URL pública; senão salva localmente."""
+    """Faz upload de uma foto (máx. 4 MB). Com Supabase Storage retorna URL pública; senão salva localmente."""
     if not file.content_type or not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Arquivo deve ser uma imagem")
-    
+
+    content = await file.read()
+    if len(content) > MAX_PHOTO_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Foto deve ter no máximo 4 MB. Reduza o tamanho ou a resolução da imagem.",
+        )
+
     file_extension = Path(file.filename).suffix if file.filename else '.jpg'
     content_type = file.content_type or "image/jpeg"
-    
+
     if use_supabase_storage():
         try:
-            content = await file.read()
             path = storage_upload_photo(content, content_type, file_extension)
             if path:
-                # Frontend guarda o path; a API gera signed URL ao servir
                 return {"filename": path, "path": path}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Erro ao enviar foto: {str(e)}")
-    
+
     unique_filename = f"{uuid.uuid4().hex}{file_extension}"
     file_path = settings.PHOTOS_DIR / unique_filename
     try:
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(content)
         return {"filename": unique_filename, "path": str(file_path.relative_to(settings.DATA_DIR))}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar foto: {str(e)}")
@@ -172,23 +218,29 @@ async def get_photo(filename: str):
 # Rotas de logo do evento
 @app.post("/api/logo/upload")
 async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Faz upload da logo. Com Supabase guarda no Storage e a URL no banco; retorna a URL."""
+    """Faz upload da logo (máx. 4 MB). Com Supabase guarda no Storage e a URL no banco; retorna a URL."""
     if not file.content_type or not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Arquivo deve ser uma imagem")
-    
+
+    content = await file.read()
+    if len(content) > MAX_PHOTO_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Logo deve ter no máximo 4 MB. Reduza o tamanho ou a resolução da imagem.",
+        )
+
     file_extension = Path(file.filename).suffix if file.filename else '.png'
     content_type = file.content_type or "image/png"
-    
+
     if use_supabase_storage():
         try:
-            content = await file.read()
             path = storage_upload_logo(content, content_type, file_extension)
             if path:
                 set_logo_path_in_db(db, path)
                 return {"filename": path, "path": path}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Erro ao enviar logo: {str(e)}")
-    
+
     for existing_file in settings.LOGO_DIR.glob("*"):
         try:
             existing_file.unlink()
@@ -198,7 +250,7 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     file_path = settings.LOGO_DIR / logo_filename
     try:
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(content)
         return {"filename": logo_filename, "path": str(file_path.relative_to(settings.DATA_DIR))}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar logo: {str(e)}")
@@ -270,13 +322,21 @@ async def generate_participant_pdf(participant_id: int, db: Session = Depends(ge
 
 @app.get("/api/pdf/complete")
 async def generate_complete_pdf(db: Session = Depends(get_db)):
-    """Gera PDF completo com todos os participantes"""
+    """Gera PDF completo com todos os participantes. Desativado na Vercel (timeout 10s)."""
+    if getattr(settings, "IS_VERCEL", False):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Geração de PDF completo não está disponível neste ambiente devido ao limite de tempo. "
+                "Use os PDFs individuais ou execute a API localmente para gerar o PDF completo."
+            ),
+        )
     pdf_service = PDFService(db=db)
     pdf_path = pdf_service.generate_complete_pdf()
-    
+
     if not pdf_path:
         raise HTTPException(status_code=500, detail="Erro ao gerar PDF")
-    
+
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
@@ -307,12 +367,11 @@ async def optimize_db():
     optimize_database()
     return {"status": "success", "message": "Banco de dados otimizado"}
 
-# Na Vercel: servir o frontend estático (dist) na raiz
-if getattr(settings, "IS_VERCEL", False):
-    from fastapi.staticfiles import StaticFiles
-    _dist = Path(__file__).resolve().parent.parent / "dist"
-    if _dist.exists():
-        app.mount("/", StaticFiles(directory=str(_dist), html=True), name="static")
+# Servir frontend estático (dist) quando a pasta existir (Vercel ou executável local)
+from fastapi.staticfiles import StaticFiles
+_dist = _dist_dir()
+if _dist.exists():
+    app.mount("/", StaticFiles(directory=str(_dist), html=True), name="static")
 
 if __name__ == "__main__":
     uvicorn.run(

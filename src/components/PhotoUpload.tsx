@@ -1,7 +1,10 @@
 import { UseFormSetValue, UseFormWatch } from 'react-hook-form'
 import { ParticipantFormData } from '@/schemas/participant'
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { photosApi } from '@/lib/api'
+
+const MAX_PHOTO_SIZE_BYTES = 3 * 1024 * 1024 // 3 MB
 
 interface PhotoUploadProps {
   setValue: UseFormSetValue<ParticipantFormData>
@@ -26,8 +29,12 @@ export default function PhotoUpload({ setValue, watch }: PhotoUploadProps) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      if (file.size > MAX_PHOTO_SIZE_BYTES) {
+        toast.error('A foto deve ter no máximo 3 MB. Reduza o tamanho ou a resolução.')
+        return
+      }
       setUploading(true)
-      
+
       try {
         // Criar preview local imediatamente
         const reader = new FileReader()
@@ -35,16 +42,19 @@ export default function PhotoUpload({ setValue, watch }: PhotoUploadProps) {
           setPreview(reader.result as string)
         }
         reader.readAsDataURL(file)
-        
+
         // Fazer upload para o servidor
         const result = await photosApi.upload(file)
         // path = caminho no Storage (Supabase) ou filename (local); a API gera signed URL ao servir
         setValue('photo_path', result.path ?? result.filename)
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Erro ao fazer upload da foto:', error)
         setPreview(null)
         setValue('photo_path', null)
-        alert('Erro ao fazer upload da foto. Tente novamente.')
+        const msg = error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : null
+        toast.error(msg || 'Erro ao fazer upload da foto. Tente novamente.')
       } finally {
         setUploading(false)
       }

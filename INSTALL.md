@@ -1,144 +1,109 @@
-# Guia de Instalação - Sistema EJC
+# Instalação - Sistema EJC
+
+O sistema **só funciona em um modo:** um servidor local (API + frontend) na porta 8000, iniciado pelo launcher. Não há suporte a “rodar frontend em uma porta e API em outra”.
 
 ## Pré-requisitos
 
-- **Node.js** 18+ e npm/yarn
-- **Python** 3.10+
-- **Git** (opcional)
+- **Windows**
+- **Python 3.10 ou 3.12** – o launcher tenta instalar via winget se não estiver instalado
+- **Node.js** (opcional) – só necessário se ainda não existir a pasta `dist` (primeira execução após clonar o projeto) ou para gerar o pacote de release
 
-## Instalação
+## Execução (único modo)
 
-### 1. Backend (API FastAPI)
+### Opção A: Duplo-clique (recomendado)
 
-```bash
-# Navegar para a pasta da API
-cd api
+1. Se for a primeira vez e não houver pasta `dist`: instale Node.js e execute na raiz do projeto:
+   ```powershell
+   npm install
+   npm run build
+   ```
+2. Duplo-clique em **run-ejc.bat**.
 
-# Criar ambiente virtual
-python -m venv venv
+O launcher vai:
+- Usar ou criar a pasta `dist` (e rodar `npm run build` se tiver Node e `dist` não existir)
+- Verificar/instalar Python (winget)
+- Criar ambiente virtual `.venv` e instalar dependências da API
+- Subir o servidor em http://localhost:8000 e abrir o navegador
 
-# Ativar ambiente virtual
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
+### Opção B: Linha de comando
 
-# Instalar dependências
-pip install -r requirements.txt
-
-# Executar a API
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```powershell
+npm start
 ```
 
-A API estará disponível em:
-- **API**: http://localhost:8000
-- **Documentação**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+(Equivalente a executar `run-ejc.ps1`.)
 
-### 2. Frontend (React + TypeScript)
+### Encerrar
 
-```bash
-# Na raiz do projeto
-npm install
+Feche a janela do terminal ou use Ctrl+C no terminal onde o servidor está rodando.
 
-# Executar em modo desenvolvimento
-npm run dev
+## Gerar pacote para distribuição
+
+Para entregar o sistema a quem não tem Node (e opcionalmente sem Python, se o launcher instalar):
+
+```powershell
+npm run build:release
 ```
 
-O frontend estará disponível em: http://localhost:3000
+Será criada a pasta **EJC-Release** com:
+- `dist/` (frontend buildado)
+- `api/` (código da API)
+- `run-ejc.bat` e `run-ejc.ps1`
 
-## Estrutura de Diretórios
+Distribua essa pasta (ex.: em .zip). O usuário extrai e dá duplo-clique em **run-ejc.bat**.  
+Ver [EXECUTAVEL.md](EXECUTAVEL.md) para gerar um .exe a partir do launcher.
+
+## Configuração (opcional)
+
+### Variáveis de ambiente (API)
+
+Arquivo `api/.env` (opcional):
+
+```env
+DATABASE_URL=sqlite:///./ejc_registration.db
+PORT=8000
+DEBUG=0
+```
+
+O banco SQLite e os arquivos (fotos, PDFs) ficam em `api/` e `api/data/`.
+
+### Modo desenvolvimento (API com reload)
+
+Só se precisar recarregar a API automaticamente ao editar código:
+
+```env
+DEBUG=1
+```
+
+E rode a API manualmente a partir da pasta `api/` com `uvicorn main:app --reload`. O frontend continua sendo servido pela mesma API após `npm run build`.
+
+## Estrutura de diretórios
 
 ```
 Projeto-EJC/
 ├── api/                    # Backend FastAPI
-│   ├── main.py            # Aplicação principal
-│   ├── config.py          # Configurações
-│   ├── database/          # Camada de dados
-│   ├── models/            # Modelos SQLAlchemy/Pydantic
-│   └── services/          # Serviços de negócio
-├── src/                   # Frontend React
-│   ├── components/        # Componentes React
-│   ├── pages/            # Páginas
-│   ├── lib/              # Utilitários e API
-│   ├── schemas/          # Schemas Zod
-│   └── types/            # Tipos TypeScript
-└── package.json          # Dependências frontend
+│   ├── main.py             # Aplicação (API + servir dist)
+│   ├── config.py           # Configurações
+│   ├── database/
+│   ├── models/
+│   └── services/
+├── src/                    # Frontend React (código-fonte)
+├── dist/                   # Frontend buildado (gerado)
+├── run-ejc.bat             # Launcher
+├── run-ejc.ps1             # Launcher (PowerShell)
+└── build-release.ps1       # Gera EJC-Release
 ```
 
-## Configuração
+## Resolução de problemas
 
-### Variáveis de Ambiente (API)
+- **“Pasta dist não encontrada”**  
+  Rode `npm install` e `npm run build` na raiz, ou use o pacote EJC-Release.
 
-Crie um arquivo `.env` na pasta `api/` (opcional):
+- **“Python não encontrado”**  
+  Instale Python 3.10+ manualmente (https://www.python.org/downloads/) ou permita que o launcher use winget para instalar Python 3.12.
 
-```env
-DATABASE_URL=sqlite:///./ejc_registration.db
-DEBUG=True
-HOST=0.0.0.0
-PORT=8000
-```
+- **Porta 8000 em uso**  
+  Altere `PORT` em `api/.env` ou feche o programa que está usando a porta 8000.
 
-### Banco de Dados
-
-O banco de dados SQLite será criado automaticamente na primeira execução da API.
-
-## Execução em Produção
-
-### Backend
-
-```bash
-cd api
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-### Frontend
-
-```bash
-npm run build
-npm run preview
-```
-
-## Troubleshooting
-
-### Erro ao instalar dependências Python
-
-Certifique-se de estar usando Python 3.10+:
-```bash
-python --version
-```
-
-### Erro de CORS
-
-Verifique se as URLs do frontend estão configuradas em `api/config.py` na lista `CORS_ORIGINS`.
-
-### Erro ao conectar ao banco de dados
-
-Certifique-se de que o diretório `api/data/` existe e tem permissões de escrita.
-
-## Desenvolvimento
-
-### Estrutura de Componentes React
-
-- `Layout` - Layout principal com navegação
-- `ParticipantForm` - Formulário de cadastro
-- `ParticipantsList` - Lista de participantes
-- `ReportsPanel` - Painel de geração de PDFs
-
-### Endpoints da API
-
-- `GET /api/participants` - Lista participantes
-- `GET /api/participants/{id}` - Obtém participante
-- `POST /api/participants` - Cria participante
-- `PUT /api/participants/{id}` - Atualiza participante
-- `DELETE /api/participants/{id}` - Exclui participante
-- `GET /api/pdf/participant/{id}` - Gera PDF individual
-- `GET /api/pdf/complete` - Gera PDF completo
-
-## Próximos Passos
-
-1. Configurar upload de fotos para o servidor
-2. Implementar autenticação/autorização
-3. Adicionar mais filtros na listagem
-4. Implementar edição de participantes
-5. Adicionar testes automatizados
+- **Erro ao conectar ao banco**  
+  Verifique se a pasta `api/` tem permissão de escrita (criação de `api/data/` e do arquivo SQLite).

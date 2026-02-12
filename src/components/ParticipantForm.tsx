@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { participantSchema, type ParticipantFormData } from '@/schemas/participant'
 import { participantsApi } from '@/lib/api'
 import FormField from './FormField'
@@ -14,9 +15,12 @@ import ECCSection from './ECCSection'
 import RestrictionsSection from './RestrictionsSection'
 import PhotoUpload from './PhotoUpload'
 
+const DRAFT_STORAGE_KEY = 'ejc_form_draft'
+
 export default function ParticipantForm() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [draftChecked, setDraftChecked] = useState(false)
 
   const {
     register,
@@ -24,6 +28,7 @@ export default function ParticipantForm() {
     watch,
     setValue,
     control,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<ParticipantFormData>({
     resolver: zodResolver(participantSchema),
@@ -33,15 +38,46 @@ export default function ParticipantForm() {
     },
   })
 
+  useEffect(() => {
+    if (draftChecked) return
+    setDraftChecked(true)
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw) as ParticipantFormData
+      if (draft && typeof draft === 'object' && draft.name) {
+        toast.info('Há dados não enviados. Os dados foram restaurados no formulário.', { duration: 5000 })
+        reset({
+          ...draft,
+          ecc_participant: draft.ecc_participant ?? false,
+          has_restrictions: draft.has_restrictions ?? false,
+        })
+        localStorage.removeItem(DRAFT_STORAGE_KEY)
+      }
+    } catch {
+      localStorage.removeItem(DRAFT_STORAGE_KEY)
+    }
+  }, [draftChecked, reset])
+
   const mutation = useMutation({
     mutationFn: participantsApi.create,
     onSuccess: () => {
+      localStorage.removeItem(DRAFT_STORAGE_KEY)
       toast.success('Participante registrado com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['participants'] })
       navigate('/participants')
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Erro ao registrar participante')
+    onError: (error: unknown, data: ParticipantFormData) => {
+      const detail =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : null
+      toast.error(detail || 'Erro ao registrar participante. Corrija e tente novamente.')
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(data))
+      } catch {
+        // ignore storage errors
+      }
     },
   })
 

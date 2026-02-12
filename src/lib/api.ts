@@ -1,16 +1,24 @@
 import axios from 'axios'
 import type { Participant, ParticipantCreate, ParticipantUpdate } from '@/types/participant'
 
+/** Base URL da API: use VITE_API_BASE_URL para Supabase Edge Functions ou outro host; senão /api (proxy local/Vercel). */
+const getApiBaseUrl = () => (import.meta.env.VITE_API_BASE_URL as string) ?? '/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
+export interface ParticipantsListResponse {
+  participants: Participant[]
+  total: number
+}
+
 export const participantsApi = {
-  getAll: async (params?: { skip?: number; limit?: number; search?: string }) => {
-    const response = await api.get<Participant[]>('/participants', { params })
+  getAll: async (params?: { skip?: number; limit?: number; search?: string }): Promise<ParticipantsListResponse> => {
+    const response = await api.get<ParticipantsListResponse>('/participants', { params })
     return response.data
   },
 
@@ -54,9 +62,9 @@ export const photosApi = {
   upload: async (file: File): Promise<{ filename: string; path: string; url?: string }> => {
     const formData = new FormData()
     formData.append('file', file)
-    
+    const base = getApiBaseUrl()
     const response = await axios.post<{ filename: string; path: string; url?: string }>(
-      '/api/photos/upload',
+      `${base}/photos/upload`,
       formData,
       {
         headers: {
@@ -67,11 +75,11 @@ export const photosApi = {
     return response.data
   },
 
-  /** Retorna a URL da foto: se path já for URL (Supabase), devolve como está; senão /api/photos/{path}. */
+  /** Retorna a URL da foto: se path já for URL (Supabase), devolve como está; senão base da API + /photos/{path}. */
   getUrl: (filename: string | null | undefined): string | null => {
     if (!filename) return null
     if (filename.startsWith('http://') || filename.startsWith('https://')) return filename
-    return `/api/photos/${filename}`
+    return `${getApiBaseUrl()}/photos/${filename}`
   },
 }
 
@@ -79,9 +87,9 @@ export const logoApi = {
   upload: async (file: File): Promise<{ filename: string; path: string }> => {
     const formData = new FormData()
     formData.append('file', file)
-    
+    const base = getApiBaseUrl()
     const response = await axios.post<{ filename: string; path: string }>(
-      '/api/logo/upload',
+      `${base}/logo/upload`,
       formData,
       {
         headers: {
@@ -93,11 +101,11 @@ export const logoApi = {
   },
 
   getUrl: (): string => {
-    return '/api/logo'
+    return `${getApiBaseUrl()}/logo`
   },
 
   delete: async (): Promise<void> => {
-    await axios.delete('/api/logo')
+    await axios.delete(`${getApiBaseUrl()}/logo`)
   },
 }
 

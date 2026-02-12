@@ -7,10 +7,11 @@ import { downloadBlob } from '@/lib/utils'
 export default function ReportsPanel() {
   const [selectedParticipantId, setSelectedParticipantId] = useState<number | null>(null)
 
-  const { data: participants = [] } = useQuery({
-    queryKey: ['participants'],
-    queryFn: () => participantsApi.getAll({ limit: 1000 }),
+  const { data: listData } = useQuery({
+    queryKey: ['participants', 'reports'],
+    queryFn: () => participantsApi.getAll({ skip: 0, limit: 1000 }),
   })
+  const participants = listData?.participants ?? []
 
   const handleGenerateIndividualPDF = async () => {
     if (!selectedParticipantId) {
@@ -34,8 +35,17 @@ export default function ReportsPanel() {
       const blob = await pdfApi.generateComplete()
       downloadBlob(blob, 'fichas_completas.pdf')
       toast.success('PDF completo gerado com sucesso!')
-    } catch (error) {
-      toast.error('Erro ao gerar PDF completo')
+    } catch (error: unknown) {
+      const status = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : null
+      if (status === 503) {
+        toast.error(
+          'Geração de PDF completo não está disponível neste ambiente devido ao limite de tempo. Use os PDFs individuais ou execute a API localmente para gerar o PDF completo.'
+        )
+      } else {
+        toast.error('Erro ao gerar PDF completo')
+      }
     }
   }
 

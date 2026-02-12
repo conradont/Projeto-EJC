@@ -8,6 +8,7 @@ _api = _root / "api"
 if str(_api) not in sys.path:
     sys.path.insert(0, str(_api))
 
-from main import app  # noqa: E402
+# Import main após adicionar api ao path
+from main import app  # type: ignore # noqa: E402
 
 __all__ = ["app"]

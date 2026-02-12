@@ -54,10 +54,30 @@ def participant_exists_with_phone(
     if not normalized:
         return False
     # Buscar participantes cujo telefone normalizado coincide
-    all_with_phone = db.query(ParticipantModel).filter(ParticipantModel.phone.isnot(None)).filter(ParticipantModel.phone != "").all()
+    all_with_phone = db.query(ParticipantModel).filter(
+        ParticipantModel.phone.isnot(None),
+        ParticipantModel.phone != ""
+    ).all()
     for p in all_with_phone:
-        if _normalize_phone(p.phone) == normalized and (exclude_id is None or p.id != exclude_id):
-            return True
+        # Obter o valor real do telefone (não o objeto Column)
+        p_phone_value = getattr(p, 'phone', None)
+        if p_phone_value is None:
+            continue
+        # Converter para string explícita
+        p_phone_str = str(p_phone_value) if p_phone_value else None
+        if not p_phone_str:
+            continue
+        # Normalizar e comparar
+        p_normalized = _normalize_phone(p_phone_str)
+        if p_normalized and p_normalized == normalized:
+            # Verificar exclude_id usando comparação explícita
+            p_id_value = getattr(p, 'id', None)
+            if exclude_id is None:
+                return True
+            # Comparar IDs explicitamente
+            if p_id_value is not None:
+                if p_id_value != exclude_id:
+                    return True
     return False
 
 

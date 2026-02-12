@@ -42,16 +42,27 @@ hiddenimports = [
     'PIL.Image',
     'jose',
     'dotenv',
-    'psycopg2',
-    'supabase',
+    # psycopg2 e supabase são opcionais (só necessários se usar PostgreSQL/Supabase)
+    # 'psycopg2',
+    # 'supabase',
 ]
 
 a = Analysis(
     [os.path.join(ROOT, 'ejc_launcher.py')],
-    pathex=[ROOT],
+    pathex=[os.path.join(ROOT, 'api')],  # Adicionar api ao path para encontrar módulos
     binaries=[],
     datas=datas,
-    hiddenimports=hiddenimports,
+    hiddenimports=hiddenimports + [
+        'main',  # Módulo principal da API
+        'config',
+        'database.database',
+        'database.crud',
+        'models.participant',
+        'models.event_setting',
+        'services.pdf_service',
+        'services.storage_service',
+        'utils.db_maintenance',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

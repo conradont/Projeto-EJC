@@ -6,7 +6,16 @@ import os
 import sys
 
 # Quando rodando como .exe (PyInstaller), dados ficam na pasta do executável
-_base_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent.parent
+def _get_base_dir():
+    if getattr(sys, "frozen", False):
+        try:
+            return Path(sys.executable).parent
+        except (AttributeError, TypeError):
+            # Fallback: usar diretório atual de trabalho
+            return Path.cwd()
+    return Path(__file__).parent.parent
+
+_base_dir = _get_base_dir()
 
 
 class Settings(BaseSettings):
